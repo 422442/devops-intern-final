@@ -1,0 +1,8 @@
+# Python Dependencies for DevOps Hello World Application
+# Currently no external dependencies required
+# This file is maintained for future extensibility
+
+# Future dependencies can be added here:
+# requests==2.31.0
+# flask==3.0.0
+# pytest==7.4.3

@@ -1,0 +1,244 @@
+================================================================================
+GRAFANA LOKI SETUP DOCUMENTATION
+DevOps Intern Final Assessment - Monitoring Component
+================================================================================
+
+Author: DevOps Engineer
+Date: October 17, 2025
+Version: 1.0
+
+================================================================================
+OVERVIEW
+================================================================================
+
+This document describes the setup and configuration of Grafana Loki for 
+centralized log aggregation in the DevOps pipeline. Loki is a horizontally 
+scalable, highly available log aggregation system inspired by Prometheus.
+
+================================================================================
+PREREQUISITES
+================================================================================
+
+- Docker installed and running
+- Docker Compose (optional, for advanced setup)
+- Network access to port 3100 (Loki API)
+- Network access to port 3101 (Promtail)
+
+================================================================================
+STEP 1: START GRAFANA LOKI
+================================================================================
+
+Command to start Loki using Docker:
+
+  docker run -d \
+    --name=loki \
+    -p 3100:3100 \
+    -v $PWD/monitoring/loki-config.yml:/etc/loki/local-config.yaml \
+    grafana/loki:latest
+
+Alternative command (using default configuration):
+
+  docker run -d --name=loki -p 3100:3100 grafana/loki:latest
+
+Verify Loki is running:
+
+  docker ps | grep loki
+  curl http://localhost:3100/ready
+
+Expected response: "ready"
+
+================================================================================
+STEP 2: START PROMTAIL (LOG SHIPPER)
+================================================================================
+
+Promtail is used to ship logs from various sources to Loki.
+
+Command to start Promtail:
+
+  docker run -d \
+    --name=promtail \
+    -v /var/log:/var/log \
+    -v $PWD/monitoring/promtail-config.yml:/etc/promtail/config.yml \
+    --link loki:loki \
+    grafana/promtail:latest
+
+For Windows with WSL2:
+
+  docker run -d \
+    --name=promtail \
+    -v /mnt/c/logs:/var/log \
+    -v $PWD/monitoring/promtail-config.yml:/etc/promtail/config.yml \
+    --link loki:loki \
+    grafana/promtail:latest
+
+================================================================================
+STEP 3: CONFIGURE LOG FORWARDING FROM NOMAD
+================================================================================
+
+To forward Nomad job logs to Loki, you can:
+
+Option A: Use Docker logging driver
+  In your Nomad job file, configure Docker to send logs to Loki:
+  
+  logging {
+    type = "loki"
+    config {
+      loki-url = "http://localhost:3100/loki/api/v1/push"
+    }
+  }
+
+Option B: Use Promtail to scrape Nomad logs
+  Configure Promtail to read from Nomad's log directory:
+  /var/nomad/alloc/*/logs/*
+
+================================================================================
+STEP 4: VIEW LOGS IN LOKI
+================================================================================
+
+Query logs using LogQL (Loki Query Language):
+
+1. Query all logs:
+   curl -G -s "http://localhost:3100/loki/api/v1/query" \
+     --data-urlencode 'query={job="devops-hello"}'
+
+2. Query logs with time range:
+   curl -G -s "http://localhost:3100/loki/api/v1/query_range" \
+     --data-urlencode 'query={job="devops-hello"}' \
+     --data-urlencode "start=$(date -u -d '1 hour ago' +%s)000000000" \
+     --data-urlencode "end=$(date -u +%s)000000000"
+
+3. Stream logs in real-time:
+   curl -G -s "http://localhost:3100/loki/api/v1/tail" \
+     --data-urlencode 'query={job="devops-hello"}' \
+     --data-urlencode "limit=100"
+
+4. Query with filters:
+   curl -G -s "http://localhost:3100/loki/api/v1/query" \
+     --data-urlencode 'query={job="devops-hello"} |= "error"'
+
+================================================================================
+STEP 5: INTEGRATE WITH GRAFANA (OPTIONAL)
+================================================================================
+
+For visualization and alerting:
+
+1. Start Grafana:
+   docker run -d --name=grafana -p 3000:3000 grafana/grafana
+
+2. Access Grafana:
+   http://localhost:3000 (default credentials: admin/admin)
+
+3. Add Loki as a data source:
+   - Configuration → Data Sources → Add data source
+   - Select "Loki"
+   - URL: http://loki:3100
+   - Save & Test
+
+4. Create a dashboard:
+   - Create → Dashboard → Add new panel
+   - Select Loki data source
+   - Enter LogQL query: {job="devops-hello"}
+
+================================================================================
+STEP 6: USEFUL LOGQL QUERIES
+================================================================================
+
+# Show all logs from hello-app
+{job="devops-hello"}
+
+# Filter logs containing "error"
+{job="devops-hello"} |= "error"
+
+# Count log lines per minute
+sum(count_over_time({job="devops-hello"}[1m]))
+
+# Show logs from specific container
+{container_name="hello-devops"}
+
+# Regex filter
+{job="devops-hello"} |~ "Error|Exception"
+
+================================================================================
+STEP 7: TROUBLESHOOTING
+================================================================================
+
+Problem: Loki not receiving logs
+Solution:
+  - Check Promtail is running: docker ps | grep promtail
+  - Check Promtail logs: docker logs promtail
+  - Verify network connectivity: curl http://localhost:3100/ready
+
+Problem: Cannot query logs
+Solution:
+  - Verify Loki API is accessible: curl http://localhost:3100/ready
+  - Check for errors in Loki logs: docker logs loki
+  - Ensure correct time range in queries
+
+Problem: High memory usage
+Solution:
+  - Limit retention period in loki-config.yml
+  - Configure chunk cache size
+  - Enable compaction
+
+================================================================================
+STEP 8: CLEANUP
+================================================================================
+
+Stop and remove containers:
+
+  docker stop loki promtail grafana
+  docker rm loki promtail grafana
+
+Remove volumes (if needed):
+
+  docker volume prune
+
+================================================================================
+MONITORING BEST PRACTICES
+================================================================================
+
+1. Log Retention:
+   - Configure appropriate retention policies
+   - Archive old logs to object storage (S3, GCS)
+
+2. Security:
+   - Use authentication for Loki API
+   - Encrypt logs in transit (TLS)
+   - Limit access to sensitive logs
+
+3. Performance:
+   - Use appropriate chunk and index sizes
+   - Configure caching for better performance
+   - Monitor Loki resource usage
+
+4. Alerting:
+   - Set up alerts for critical errors
+   - Monitor log ingestion rate
+   - Alert on missing log streams
+
+================================================================================
+ADDITIONAL RESOURCES
+================================================================================
+
+- Loki Documentation: https://grafana.com/docs/loki/latest/
+- LogQL Documentation: https://grafana.com/docs/loki/latest/logql/
+- Promtail Documentation: https://grafana.com/docs/loki/latest/clients/promtail/
+- Grafana Documentation: https://grafana.com/docs/grafana/latest/
+
+================================================================================
+CONCLUSION
+================================================================================
+
+The monitoring setup using Grafana Loki provides:
+✅ Centralized log aggregation
+✅ Real-time log streaming
+✅ Powerful query capabilities with LogQL
+✅ Integration with Grafana for visualization
+✅ Scalable architecture for production use
+
+For questions or issues, refer to the official Grafana Loki documentation
+or contact the DevOps team.
+
+================================================================================
+END OF DOCUMENT
+================================================================================
