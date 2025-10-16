@@ -4,8 +4,6 @@
 **Date:** October 17, 2025  
 **Project:** Complete DevOps Pipeline Implementation
 
-[![CI Pipeline](https://github.com/422442/devops-intern-final/actions/workflows/ci.yml/badge.svg)](https://github.com/422442/devops-intern-final/actions/workflows/ci.yml)
-
 ## 📋 Project Overview
 
 This repository demonstrates a complete DevOps workflow using industry-standard open-source tools including Git, Docker, GitHub Actions CI/CD, HashiCorp Nomad, and Grafana Loki for monitoring. The project simulates a realistic DevOps pipeline from code development to deployment and monitoring.
@@ -326,3 +324,4 @@ This project is created for educational purposes as part of the DevOps Intern Fi
 
 **Last Updated:** October 17, 2025  
 **Version:** 1.0.0
+
